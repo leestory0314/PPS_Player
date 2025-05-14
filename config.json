@@ -1,0 +1,14 @@
+{
+    "store_id": "store_test_001",
+    "top_notice_text": "핑퐁스테이션 안산고잔점 / 연락처: 010-2198-0815",
+    "music_paths": [],
+    "music_play_mode": "loop",
+    "polling_interval": 5,
+    "url": "https://taggugo.kr/dashboard/",
+    "media_paths": [
+    "PPS_Player/resources/images/PPS_Player 하단 배너_20250514.gif"    
+    ],
+    "media_rolling": false,
+    "bottom_height": 200
+  }
+  

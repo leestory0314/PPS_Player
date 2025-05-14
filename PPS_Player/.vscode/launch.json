@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Run PPS_Player",
+        "type": "python",
+        "request": "launch",
+        "module": "PPS_Player.app",
+        "console": "integratedTerminal"
+      }
+    ]
+  }
+  
