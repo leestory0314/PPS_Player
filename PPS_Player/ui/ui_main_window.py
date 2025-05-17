@@ -2,11 +2,14 @@
 # ---------------------------
 # Version History
 # v0.2.2 - 2025.04.26 - 모니터 복귀 시 보이지 않는 현상 개선 (move/raise_ 처리)
+# v0.2.3 - 2025.04.26 - 웹뷰 자동 새로고침 기능 추가 (기본 10초, 설정 연동)
+# v0.2.4 - 2025.04.26 - 웹뷰 reload 방식 → JS 함수 실행 방식으로 변경 (눈 깜빡임 방지)
+# v0.2.5 - 2025.04.26 - 캐시/쿠키/방문기록 정리 타이머 추가 (1시간 간격)
 # ---------------------------
 
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QApplication
 from PyQt5.QtCore import Qt, QTimer, QUrl
 from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QApplication
 from PPS_Player.core.media_viewer import MediaViewer
 
 class MainWindow(QWidget):
@@ -28,6 +31,19 @@ class MainWindow(QWidget):
         self.center_view = QWebEngineView()
         url = self.config.get("url", "https://www.example.com")
         self.center_view.load(QUrl(url))
+
+        # ✅ 웹뷰 자동 새로고침 → JS 함수 실행 방식 (눈 깜빡임 방지)
+        refresh_interval = max(self.config.get("web_refresh_interval", 10000), 5000)
+        self.web_refresh_timer = QTimer()
+        self.web_refresh_timer.timeout.connect(
+            lambda: self.center_view.page().runJavaScript("if (typeof dashboard_update === 'function') dashboard_update();")
+        )
+        self.web_refresh_timer.start(refresh_interval)
+
+        # ✅ 웹 캐시/쿠키 정리 타이머 (1시간마다)
+        self.cleanup_timer = QTimer()
+        self.cleanup_timer.timeout.connect(self.cleanup_web_cache)
+        self.cleanup_timer.start(3600 * 1000)  # 1시간 간격
 
         media_paths = self.config.get("media_paths", [])
         media_rolling = self.config.get("media_rolling", True)
@@ -59,6 +75,13 @@ class MainWindow(QWidget):
         self.monitor_timer = QTimer()
         self.monitor_timer.timeout.connect(self.check_monitor_change)
         self.monitor_timer.start(1000)
+
+    def cleanup_web_cache(self):
+        print("🧹 캐시/쿠키 정리 실행")
+        profile = self.center_view.page().profile()
+        profile.clearHttpCache()
+        profile.clearAllVisitedLinks()
+        profile.cookieStore().deleteAllCookies()
 
     def update_button_position(self):
         x = self.width() - 130
@@ -115,6 +138,6 @@ class MainWindow(QWidget):
                 self.move(geo.x(), geo.y())
                 self.resize(1024, 768)
                 self.exit_fullscreen()
-                self.raise_()  # 🔥 창 최상단으로
-                self.activateWindow()  # 🔥 포커스 복원
+                self.raise_()
+                self.activateWindow()
                 self.current_screen_index = 0

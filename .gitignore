@@ -1,4 +1,29 @@
-echo .venv/ > .gitignore
-echo __pycache__/ >> .gitignore
-echo *.pyc >> .gitignore
-echo .DS_Store >> .gitignore
+# 가상환경
+.venv/
+env/
+venv/
+
+# PyInstaller 빌드 폴더
+build/
+dist/
+*.spec
+
+# Python 캐시/컴파일
+__pycache__/
+*.py[cod]
+*$py.class
+
+# VSCode
+.vscode/
+
+# 시스템 파일
+.DS_Store
+Thumbs.db
+
+# 테스트 로그, 임시 파일
+*.log
+*.tmp
+*.bak
+
+# 설정 (선택)
+config.json
