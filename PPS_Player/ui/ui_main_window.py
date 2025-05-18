@@ -1,16 +1,25 @@
 # PPS_Player/ui/ui_main_window.py
 # ---------------------------
 # Version History
-# v0.2.2 - 2025.04.26 - 모니터 복귀 시 보이지 않는 현상 개선 (move/raise_ 처리)
-# v0.2.3 - 2025.04.26 - 웹뷰 자동 새로고침 기능 추가 (기본 10초, 설정 연동)
-# v0.2.4 - 2025.04.26 - 웹뷰 reload 방식 → JS 함수 실행 방식으로 변경 (눈 깜빡임 방지)
-# v0.2.5 - 2025.04.26 - 캐시/쿠키/방문기록 정리 타이머 추가 (1시간 간격)
+# v0.3.5 - 2025.05.15 - PyQt6 전환 후 consoleMessage 대응 (QWebEnginePage 서브클래스)
 # ---------------------------
 
-from PyQt5.QtCore import Qt, QTimer, QUrl
-from PyQt5.QtWebEngineWidgets import QWebEngineView
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QPushButton, QApplication
+from PyQt6.QtCore import Qt, QTimer, QUrl
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWebEngineCore import QWebEnginePage
+from PyQt6.QtWebEngineCore import QWebEngineScript
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QApplication, QHBoxLayout, QMessageBox
 from PPS_Player.core.media_viewer import MediaViewer
+import pyttsx3
+
+class CustomWebPage(QWebEnginePage):
+    def javaScriptConsoleMessage(self, level, msg, line, sourceID):
+        if msg.startswith("TTS:"):
+            text = msg[4:].strip()
+            print(f"🔊 TTS 감지: {text}")
+            if self.parent() and hasattr(self.parent(), "tts_engine"):
+                self.parent().tts_engine.say(text)
+                self.parent().tts_engine.runAndWait()
 
 class MainWindow(QWidget):
     def __init__(self, config):
@@ -18,32 +27,31 @@ class MainWindow(QWidget):
         self.config = config
         self.is_fullscreen = False
         self.current_screen_index = 0
+        self.tts_engine = pyttsx3.init()
         self.init_ui()
 
     def init_ui(self):
         self.resize(1024, 768)
         self.setWindowTitle("PPS 플레이어")
 
-        layout = QVBoxLayout()
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
 
         self.center_view = QWebEngineView()
+        self.center_page = CustomWebPage(self.center_view)
+        self.center_view.setPage(self.center_page)
+        self.preload_tts_patch()
+
         url = self.config.get("url", "https://www.example.com")
         self.center_view.load(QUrl(url))
 
-        # ✅ 웹뷰 자동 새로고침 → JS 함수 실행 방식 (눈 깜빡임 방지)
         refresh_interval = max(self.config.get("web_refresh_interval", 10000), 5000)
         self.web_refresh_timer = QTimer()
         self.web_refresh_timer.timeout.connect(
             lambda: self.center_view.page().runJavaScript("if (typeof dashboard_update === 'function') dashboard_update();")
         )
         self.web_refresh_timer.start(refresh_interval)
-
-        # ✅ 웹 캐시/쿠키 정리 타이머 (1시간마다)
-        self.cleanup_timer = QTimer()
-        self.cleanup_timer.timeout.connect(self.cleanup_web_cache)
-        self.cleanup_timer.start(3600 * 1000)  # 1시간 간격
 
         media_paths = self.config.get("media_paths", [])
         media_rolling = self.config.get("media_rolling", True)
@@ -52,21 +60,29 @@ class MainWindow(QWidget):
         self.bottom_viewer = MediaViewer(media_paths, rolling=media_rolling)
         self.bottom_viewer.setFixedHeight(bottom_height)
 
-        layout.addWidget(self.center_view)
-        layout.addWidget(self.bottom_viewer)
-        self.setLayout(layout)
+        self.test_button = QPushButton("🔊 테스트 음성 출력", self)
+        self.test_button.setFixedSize(160, 30)
+        self.test_button.clicked.connect(self.test_tts_console_injection)
 
         self.fullscreen_button = QPushButton("전체화면", self)
         self.fullscreen_button.setFixedSize(120, 30)
         self.fullscreen_button.clicked.connect(self.enter_fullscreen)
-        self.fullscreen_button.show()
 
         self.exit_fullscreen_button = QPushButton("일반모드", self)
         self.exit_fullscreen_button.setFixedSize(120, 30)
         self.exit_fullscreen_button.clicked.connect(self.exit_fullscreen)
         self.exit_fullscreen_button.hide()
 
-        self.update_button_position()
+        self.button_layout = QHBoxLayout()
+        self.button_layout.addStretch()
+        self.button_layout.addWidget(self.test_button)
+        self.button_layout.addWidget(self.fullscreen_button)
+        self.button_layout.addWidget(self.exit_fullscreen_button)
+
+        self.main_layout.addLayout(self.button_layout)
+        self.main_layout.addWidget(self.center_view)
+        self.main_layout.addWidget(self.bottom_viewer)
+        self.setLayout(self.main_layout)
 
         self.mouse_timer = QTimer()
         self.mouse_timer.timeout.connect(self.check_mouse_position)
@@ -76,18 +92,57 @@ class MainWindow(QWidget):
         self.monitor_timer.timeout.connect(self.check_monitor_change)
         self.monitor_timer.start(1000)
 
+    def preload_tts_patch(self):
+        patch_js = '''
+        (function() {
+          function patchTTS() {
+            if (typeof window.speechSynthesis === "undefined") {
+              window.speechSynthesis = {
+                speak: function(u) {
+                  if (u && u.text) console.log("TTS:" + u.text);
+                }
+              };
+            }
+            if (typeof SpeechSynthesisUtterance === "undefined") {
+              window.SpeechSynthesisUtterance = function(text) {
+                console.log("TTS:" + text);
+                return { text: text };
+              };
+            }
+            console.log("✅ speech patch injected");
+          }
+          patchTTS();
+          const observer = new MutationObserver(() => patchTTS());
+          observer.observe(document.body, { childList: true, subtree: true });
+        })();
+        '''
+        script = QWebEngineScript()
+        script.setName("TTSInject")
+        script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentReady)
+        script.setRunsOnSubFrames(True)
+        script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+        script.setSourceCode(patch_js)
+        self.center_view.page().profile().scripts().insert(script)
+
+    def test_tts_console_injection(self):
+        try:
+            script = """
+            if (typeof SpeechSynthesisUtterance !== 'undefined') {
+                var u = new SpeechSynthesisUtterance("테스트 음성 출력입니다");
+                speechSynthesis.speak(u);
+            } else {
+                console.log("TTS:테스트 음성 출력입니다");
+            }
+            """
+            self.center_view.page().runJavaScript(script)
+        except Exception as e:
+            QMessageBox.warning(self, "TTS 테스트 실패", f"자바스크립트 실행 중 오류 발생:\n{str(e)}")
+
     def cleanup_web_cache(self):
-        print("🧹 캐시/쿠키 정리 실행")
-        profile = self.center_view.page().profile()
-        profile.clearHttpCache()
-        profile.clearAllVisitedLinks()
-        profile.cookieStore().deleteAllCookies()
+        pass
 
     def update_button_position(self):
-        x = self.width() - 130
-        y = 10
-        self.fullscreen_button.move(x, y)
-        self.exit_fullscreen_button.move(x, y)
+        pass
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

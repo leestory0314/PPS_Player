@@ -5,6 +5,7 @@
 # v0.2.0 - 2025.04.26 - config.json 없을 경우 기본 생성 추가
 # v0.2.3 - 2025.04.26 - 디버깅 로그 시스템 추가 (logs/YYYY-MM-DD.log)
 # v0.2.4 - 2025.04.26 - 경로 처리 통일 (PyInstaller 대비 get_base_path 적용)
+# v0.3.0 - 2025.05.15 - PyQt6 호환 구조로 전환
 # ---------------------------
 
 import sys
@@ -12,7 +13,7 @@ import os
 import json
 import logging
 from datetime import datetime
-from PyQt5.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication
 from PPS_Player.config.config_manager import ConfigManager
 from PPS_Player.ui.ui_main_window import MainWindow
 
@@ -61,7 +62,7 @@ def main():
         app = QApplication(sys.argv)
         window = MainWindow(config)
         window.show()
-        sys.exit(app.exec_())
+        sys.exit(app.exec())  # ✅ PyQt6는 exec_() → exec()
     except Exception as e:
         logging.exception("🚨 예외 발생:")
         raise
