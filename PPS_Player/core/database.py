@@ -1,13 +1,19 @@
 # core/database.py
+# Version History
+# v0.2.1 - table_status 테이블 생성 및 insert 함수 구현
 
 import sqlite3
+from pathlib import Path
 
-DB_PATH = "store_data.db"
+# DB 파일 경로 설정 (최상위 디렉토리에 store_data.db 생성)
+DB_PATH = Path(__file__).parent.parent / "store_data.db"
 
 def get_connection():
+    """SQLite DB 연결 반환"""
     return sqlite3.connect(DB_PATH)
 
 def init_db():
+    """table_status 테이블이 없으면 생성"""
     with get_connection() as conn:
         conn.execute("""
         CREATE TABLE IF NOT EXISTS table_status (
@@ -25,6 +31,7 @@ def init_db():
         conn.commit()
 
 def insert_table_status(data: dict):
+    """table_status 테이블에 한 건 삽입"""
     with get_connection() as conn:
         conn.execute("""
         INSERT INTO table_status (
