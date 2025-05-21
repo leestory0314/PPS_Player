@@ -14,11 +14,10 @@ class ConfigManager:
         self.config_path = self.get_default_config_path()
 
     def get_default_config_path(self):
-        if getattr(sys, 'frozen', False):
-            base_path = os.path.dirname(sys.executable)
-        else:
-            base_path = os.path.dirname(os.path.abspath(__file__))
-        return os.path.join(base_path, '..', 'config.json')
+        # ✅ 프로젝트 루트 기준으로 config.json 사용
+        base_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))  # 상위 두 단계
+        return os.path.join(base_path, 'config.json')
+
 
     def load_config(self, path=None):
         config_file = path or self.config_path

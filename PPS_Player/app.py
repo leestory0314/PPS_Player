@@ -1,71 +1,81 @@
-# PPS_Player/app.py
-# ---------------------------
+# ---------------------------------------
+# Module: app.py
+# 위치: PPS_Player/
+# 작성 목적: PPS_Player 실행 진입점, 등록 여부 확인 및 메인 UI 실행
+# ---------------------------------------
 # Version History
-# v0.1.0 - 2025.04.25 - 초기 앱 진입점 생성
-# v0.2.0 - 2025.04.26 - config.json 없을 경우 기본 생성 추가
-# v0.2.3 - 2025.04.26 - 디버깅 로그 시스템 추가 (logs/YYYY-MM-DD.log)
-# v0.2.4 - 2025.04.26 - 경로 처리 통일 (PyInstaller 대비 get_base_path 적용)
-# v0.3.0 - 2025.05.15 - PyQt6 호환 구조로 전환
-# ---------------------------
+# v0.1.0 - 2025.05.01 - 기본 실행 구조 구현
+# v0.2.0 - 2025.05.20 - 절대경로 기반 DB 관리 + 등록 체크 기능 추가
+# ---------------------------------------
 
 import sys
 import os
-import json
-import logging
-from datetime import datetime
+import sqlite3
 from PyQt6.QtWidgets import QApplication
-from PPS_Player.config.config_manager import ConfigManager
+from PPS_Player.config.register_popup import RegisterPopup
 from PPS_Player.ui.ui_main_window import MainWindow
+from PPS_Player.core.database import migrate_db
+from PPS_Player.core.constants import DB_PATH
 
-# ✅ base 경로 함수 정의 (PyInstaller 대응)
-def get_base_path():
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
+from PPS_Player.config.config_manager import ConfigManager
 
-BASE_PATH = get_base_path()
+def is_registered() -> bool:
+    """store_info에 등록 정보가 있는지 확인"""
+    print("[CHECK] DB 경로:", DB_PATH)
 
-# ✅ 로그 디렉토리 설정
-now = datetime.now()
-date_str = now.strftime("%Y-%m-%d")
-month_folder = now.strftime("%Y-%m")
-log_dir = os.path.join(BASE_PATH, "logs", month_folder)
-os.makedirs(log_dir, exist_ok=True)
-log_path = os.path.join(log_dir, f"{date_str}.log")
+    if not os.path.exists(DB_PATH):
+        print("❌ DB 파일 없음")
+        return False
 
-# ✅ 로깅 설정
-logging.basicConfig(
-    filename=log_path,
-    filemode="a",
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(message)s"
-)
-
-logging.info("💡 PPS_Player 실행 시작")
-
-# ✅ config.json 자동 생성 로직
-CONFIG_PATH = os.path.join(BASE_PATH, "config.json")
-if not os.path.exists(CONFIG_PATH):
-    logging.warning("⚠️ config.json 없음. 기본값으로 생성합니다.")
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump({
-            "url": "https://www.naver.com",
-            "media_paths": [],
-            "bottom_height": 300,
-            "media_rolling": True
-        }, f, indent=2)
-
-# ✅ 애플리케이션 진입점
-def main():
     try:
-        config = ConfigManager().load_config(CONFIG_PATH)
-        app = QApplication(sys.argv)
-        window = MainWindow(config)
-        window.show()
-        sys.exit(app.exec())  # ✅ PyQt6는 exec_() → exec()
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("SELECT store_uid FROM store_info LIMIT 1")
+        row = cursor.fetchone()
+        conn.close()
+
+        if row:
+            print("✅ 등록 정보 있음:", row[0])
+            return row[0].strip() != ""
+        else:
+            print("❌ 등록 정보 없음")
+            return False
+
     except Exception as e:
-        logging.exception("🚨 예외 발생:")
-        raise
+        print("❌ DB 확인 오류:", e)
+        return False
+
+
+def run_registration(app: QApplication):
+    """등록 UI 실행 → 등록 실패 시 프로그램 종료"""
+    popup = RegisterPopup()
+    result = popup.exec()
+    if result != 1:
+        print("❌ 등록 실패 또는 취소됨")
+        sys.exit(1)
+
+
+def main():
+    app = QApplication(sys.argv)
+
+    # ✅ DB 마이그레이션 (store_info 테이블 포함)
+    migrate_db(DB_PATH)
+
+    # ✅ 등록 확인 후, 없으면 등록창 띄우기
+    if not is_registered():
+        run_registration(app)
+
+    # ✅ config.json 로드
+    config = ConfigManager().load_config()
+    print("🛠️ config 로드됨:", config)  # 확인 로그
+
+    # ✅ config 적용하여 메인 실행
+    window = MainWindow(config=config)
+    window.show()
+
+    sys.exit(app.exec())
+    sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()

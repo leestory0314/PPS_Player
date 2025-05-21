@@ -11,6 +11,8 @@ from PyQt6.QtWebEngineCore import QWebEngineScript
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QApplication, QHBoxLayout, QMessageBox
 from PPS_Player.core.media_viewer import MediaViewer
 import pyttsx3
+from PPS_Player.ui.header_widget import HeaderWidget
+
 
 class CustomWebPage(QWebEnginePage):
     def javaScriptConsoleMessage(self, level, msg, line, sourceID):
@@ -31,12 +33,18 @@ class MainWindow(QWidget):
         self.init_ui()
 
     def init_ui(self):
+        # ✅ config에서 header 높이 가져오기
+        header_height = self.config.get("header_height", 60)
         self.resize(1024, 768)
         self.setWindowTitle("PPS 플레이어")
 
         self.main_layout = QVBoxLayout()
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
+
+        # ✅ Header 위젯 생성 시 높이 전달
+        self.header = HeaderWidget("local.sqlite", height=header_height)
+        self.main_layout.addWidget(self.header)
 
         self.center_view = QWebEngineView()
         self.center_page = CustomWebPage(self.center_view)
