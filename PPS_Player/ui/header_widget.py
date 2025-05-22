@@ -1,65 +1,62 @@
+# Version: v1.3.3 - height, font 사이즈 config 적용 보장
+
 from PyQt6.QtWidgets import QWidget, QLabel, QHBoxLayout
 from PyQt6.QtGui import QPixmap, QFont
-from PyQt6.QtCore import QTimer, QDateTime, Qt
-import sqlite3
+from PyQt6.QtCore import QTimer, Qt
+from datetime import datetime
+import os
+
 
 class HeaderWidget(QWidget):
-    def __init__(self, db_path: str, height: int = 30):  # ✅ height 인자 추가
-        super().__init__()
-        self.db_path = db_path
+    def __init__(self, config: dict, parent=None):
+        super().__init__(parent)
+        self.config = config
+        self._init_ui()
+        self._init_timer()
 
-        self.logo_label = QLabel()
-        self.info_label = QLabel()
-        self.time_label = QLabel()
+    def _init_ui(self):
+        height = self.config.get("header_height", 40)
+        bg_color = self.config.get("header_bg_color", "#111111")
+        text_color = self.config.get("header_text_color", "#ffffff")
+        font_family = self.config.get("header_font", "Noto Sans KR")
+        font_size = self.config.get("header_font_size", 14)
 
-        self._setup_ui()
-        self._load_store_info()
-        self._start_clock()
-        self.setFixedHeight(height)  # ✅ 설정된 높이 적용
+        self.setFixedHeight(height)  # 명확히 고정
+        self.setStyleSheet(f"background-color: {bg_color};")
 
-    def _setup_ui(self):
         layout = QHBoxLayout()
-        layout.setContentsMargins(15, 4, 15, 4)  # ✅ 마진 축소
+        layout.setContentsMargins(10, 0, 10, 0)
+        layout.setSpacing(20)
 
-        self.logo_label.setFixedSize(32, 32)  # ✅ 로고 크기 고정
+        logo_path = self.config.get("header_logo_path", "")
+        logo_label = QLabel()
+        if logo_path and os.path.exists(logo_path):
+            pixmap = QPixmap(logo_path)
+            logo_label.setPixmap(pixmap.scaledToHeight(height - 8, Qt.TransformationMode.SmoothTransformation))
+        logo_label.setStyleSheet(f"background-color: {bg_color};")
+        layout.addWidget(logo_label)
 
-        self.info_label.setFont(QFont("Malgun Gothic", 10))  # ✅ 폰트 축소
-        self.info_label.setStyleSheet("color: white;")
+        message_text = self.config.get("header_message_text", "")
+        self.message_label = QLabel(message_text)
+        self.message_label.setFont(QFont(font_family, font_size))
+        self.message_label.setStyleSheet(f"background-color: {bg_color}; color: {text_color};")
+        self.message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.message_label, stretch=1)
 
-        self.time_label.setFont(QFont("Segoe UI", 10))  # ✅ 시계도 동일
-        self.time_label.setStyleSheet("color: white;")
-        self.time_label.setAlignment(Qt.AlignmentFlag.AlignRight)
-
-        layout.addWidget(self.logo_label)
-        layout.addSpacing(10)
-        layout.addWidget(self.info_label)
-        layout.addStretch()
+        self.time_label = QLabel()
+        self.time_label.setFont(QFont("Consolas", font_size))
+        self.time_label.setStyleSheet(f"background-color: {bg_color}; color: {text_color};")
         layout.addWidget(self.time_label)
 
         self.setLayout(layout)
-        self.setStyleSheet("background-color: #222;")
-
-
-
-    def _load_store_info(self):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT brand_name, store_name, contact, logo_url FROM store_info LIMIT 1")
-        row = cursor.fetchone()
-        conn.close()
-
-        if row:
-            brand, store, contact, logo_url = row
-            self.info_label.setText(f"{brand} | {store}   {contact}")
-            if logo_url and logo_url.strip():
-                self.logo_label.setPixmap(QPixmap(logo_url).scaledToHeight(32))
-
-    def _start_clock(self):
         self._update_time()
-        timer = QTimer(self)
-        timer.timeout.connect(self._update_time)
-        timer.start(1000)
+
+    def _init_timer(self):
+        self.timer = QTimer(self)
+        self.timer.setInterval(60000)
+        self.timer.timeout.connect(self._update_time)
+        self.timer.start()
 
     def _update_time(self):
-        now = QDateTime.currentDateTime()
-        self.time_label.setText(now.toString("MM/dd HH:mm"))
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+        self.time_label.setText(now)
